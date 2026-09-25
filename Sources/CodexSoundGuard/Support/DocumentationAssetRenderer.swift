@@ -10,7 +10,6 @@ enum DocumentationAssetRenderer {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 
         let monitor = SessionMonitor.documentationPreview()
-        let updateChecker = UpdateChecker(currentVersion: currentVersion())
         try render(
             MenuBarPreviewStrip(usage: monitor.latestUsage),
             size: CGSize(width: 840, height: 164),
@@ -18,45 +17,30 @@ enum DocumentationAssetRenderer {
         )
         try render(
             MenuBarView()
-                .environmentObject(monitor)
-                .environmentObject(updateChecker),
-            size: CGSize(width: 408, height: 660),
+                .environmentObject(monitor),
+            size: CGSize(width: 408, height: 420),
             to: outputDirectory.appendingPathComponent("menu-panel.png")
         )
         try render(
             MenuBarView()
                 .environmentObject(monitor)
-                .environmentObject(updateChecker)
                 .frame(width: 408, height: 330, alignment: .top)
                 .clipped(),
             size: CGSize(width: 408, height: 330),
             to: outputDirectory.appendingPathComponent("menu-panel-usage.png")
         )
         try render(
-            PreferencesView(loginItemStatusProvider: { .disabled })
-                .environmentObject(monitor)
-                .environmentObject(updateChecker),
-            size: CGSize(width: 780, height: 700),
+            PreferencesView()
+                .environmentObject(monitor),
+            size: CGSize(width: 700, height: 560),
             to: outputDirectory.appendingPathComponent("preferences.png")
         )
         try render(
-            PreferencesView(initialPane: .diagnostics, loginItemStatusProvider: { .disabled })
-                .environmentObject(monitor)
-                .environmentObject(updateChecker),
-            size: CGSize(width: 780, height: 700),
+            PreferencesView(initialPane: .usage)
+                .environmentObject(monitor),
+            size: CGSize(width: 700, height: 560),
             to: outputDirectory.appendingPathComponent("preferences-diagnostics.png")
         )
-    }
-
-    private static func currentVersion() -> String {
-        let versionURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("VERSION")
-        let version = (try? String(contentsOf: versionURL, encoding: .utf8))?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let version, !version.isEmpty else {
-            return "0.0.0"
-        }
-        return version
     }
 
     private static func render<V: View>(_ view: V, size: CGSize, to url: URL) throws {

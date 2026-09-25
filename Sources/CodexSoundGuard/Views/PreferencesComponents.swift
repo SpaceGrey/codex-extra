@@ -2,10 +2,8 @@ import AppKit
 import SwiftUI
 
 enum PreferencesPane: String, CaseIterable, Identifiable {
-    case general
     case sounds
-    case limits
-    case diagnostics
+    case usage
 
     var id: String {
         rawValue
@@ -13,53 +11,30 @@ enum PreferencesPane: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .general:
-            return "通用"
         case .sounds:
             return "声音"
-        case .limits:
-            return "额度"
-        case .diagnostics:
-            return "诊断"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .general:
-            return "运行与启动"
-        case .sounds:
-            return "提示音与静音"
-        case .limits:
-            return "阈值与数据"
-        case .diagnostics:
-            return "状态与隐私"
+        case .usage:
+            return "用量"
         }
     }
 
     var iconName: String {
         switch self {
-        case .general:
-            return "switch.2"
         case .sounds:
             return "speaker.wave.2"
-        case .limits:
+        case .usage:
             return "gauge.with.dots.needle.50percent"
-        case .diagnostics:
-            return "stethoscope"
         }
     }
 }
 
 struct PreferencesSidebar: View {
     @Binding var selectedPane: PreferencesPane
-    let isRunning: Bool
-    let filesWatched: Int
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 10) {
-                CodexUsageMeter(statusIntensity: isRunning ? 0.76 : 0.34, usage: nil)
+                CodexUsageMeter(statusIntensity: 0.7, usage: nil)
                     .frame(width: 28, height: 28)
                     .padding(7)
                     .background(InterfaceDesign.elevatedPanel.opacity(0.56), in: RoundedRectangle(cornerRadius: InterfaceDesign.panelRadius, style: .continuous))
@@ -68,14 +43,9 @@ struct PreferencesSidebar: View {
                             .strokeBorder(InterfaceDesign.border, lineWidth: 1)
                     }
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Codex Monitor")
-                        .font(.headline.weight(.semibold))
-                        .lineLimit(1)
-                    Text("设置")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text("Codex Monitor")
+                    .font(.headline.weight(.semibold))
+                    .lineLimit(1)
             }
             .padding(.horizontal, 16)
             .padding(.top, 20)
@@ -93,11 +63,8 @@ struct PreferencesSidebar: View {
             .padding(.horizontal, 10)
 
             Spacer()
-
-            SidebarStatusPill(isRunning: isRunning, filesWatched: filesWatched)
-                .padding([.horizontal, .bottom], 12)
         }
-        .frame(width: 212)
+        .frame(width: 188)
         .background(InterfaceDesign.basePanel.opacity(0.38))
     }
 }
@@ -117,20 +84,14 @@ private struct SidebarRow: View {
                     .frame(width: 25, height: 25)
                     .background(isSelected ? InterfaceDesign.accent.opacity(0.08) : Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(pane.title)
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text(pane.subtitle)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                Text(pane.title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
 
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 10)
-            .frame(height: 48)
+            .frame(height: 36)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -149,50 +110,14 @@ private struct SidebarRow: View {
     }
 }
 
-private struct SidebarStatusPill: View {
-    let isRunning: Bool
-    let filesWatched: Int
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(isRunning ? InterfaceDesign.accent : Color.primary.opacity(0.30))
-                .frame(width: 7, height: 7)
-
-            Text(isRunning ? "用量中" : "启动中")
-                .font(.caption.weight(.medium))
-
-            Spacer(minLength: 6)
-
-            Text("\(filesWatched)")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 10)
-        .frame(height: 32)
-        .background(InterfaceDesign.elevatedPanel.opacity(0.50), in: RoundedRectangle(cornerRadius: InterfaceDesign.panelRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: InterfaceDesign.panelRadius, style: .continuous)
-                .strokeBorder(InterfaceDesign.border, lineWidth: 1)
-        }
-    }
-}
-
 struct PreferencesHeader: View {
     let pane: PreferencesPane
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(pane.title)
-                .font(.system(size: 26, weight: .semibold))
-                .lineLimit(1)
-
-            Text(pane.subtitle)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .padding(.bottom, 4)
+        Text(pane.title)
+            .font(.system(size: 26, weight: .semibold))
+            .lineLimit(1)
+            .padding(.bottom, 4)
     }
 }
 
@@ -284,22 +209,14 @@ struct SettingsValueRow: View {
 
 struct SettingsToggleRow: View {
     let title: String
-    let detail: String
     @Binding var isOn: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+            Text(title)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
 
             Spacer(minLength: 24)
 
@@ -312,47 +229,8 @@ struct SettingsToggleRow: View {
     }
 }
 
-struct SettingsButtonRow: View {
-    let title: String
-    let detail: String
-    let buttonTitle: String
-    let systemImage: String
-    let isDisabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 24)
-
-            Button(action: action) {
-                Label(buttonTitle, systemImage: systemImage)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-                    .padding(.horizontal, 10)
-                    .frame(height: 28)
-            }
-            .buttonStyle(SettingsActionButtonStyle())
-            .disabled(isDisabled)
-        }
-        .settingsRow()
-    }
-}
-
 struct SoundSettingsRow: View {
     let title: String
-    let detail: String
     @Binding var isEnabled: Bool
     let path: String
     let testAction: () -> Void
@@ -361,15 +239,9 @@ struct SoundSettingsRow: View {
     var body: some View {
         VStack(spacing: 10) {
             HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.callout.weight(.medium))
-                        .lineLimit(1)
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                Text(title)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
 
                 Spacer(minLength: 24)
 
@@ -416,165 +288,6 @@ struct SoundSettingsRow: View {
     }
 }
 
-struct SettingsFootnote: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            .settingsRow(verticalPadding: 8)
-    }
-}
-
-struct SettingsInfoBox: View {
-    let title: String
-    let text: String
-    var iconName = "info.circle"
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: iconName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(InterfaceDesign.accent)
-                .frame(width: 18)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text(text)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .settingsRow(verticalPadding: 10)
-    }
-}
-
-struct DiagnosticStatusRow: View {
-    enum Status {
-        case ok
-        case warning
-        case neutral
-
-        var iconName: String {
-            switch self {
-            case .ok:
-                return "checkmark.circle.fill"
-            case .warning:
-                return "exclamationmark.triangle.fill"
-            case .neutral:
-                return "circle.fill"
-            }
-        }
-
-        var color: Color {
-            switch self {
-            case .ok:
-                return InterfaceDesign.accent
-            case .warning:
-                return Color.orange
-            case .neutral:
-                return Color.secondary.opacity(0.70)
-            }
-        }
-    }
-
-    let title: String
-    let detail: String
-    let status: Status
-    var actionTitle: String?
-    var actionIcon: String?
-    var action: (() -> Void)?
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: status.iconName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(status.color)
-                .frame(width: 18)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.callout.weight(.medium))
-                    .lineLimit(1)
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-            }
-
-            Spacer(minLength: 12)
-
-            if let actionTitle, let action {
-                Button(action: action) {
-                    Label(actionTitle, systemImage: actionIcon ?? "arrow.right")
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                        .padding(.horizontal, 10)
-                        .frame(height: 28)
-                }
-                .buttonStyle(SettingsActionButtonStyle())
-            }
-        }
-        .settingsRow()
-    }
-}
-
-struct QuietHourPicker: View {
-    @Binding var selection: Int
-
-    var body: some View {
-        Picker("时间", selection: $selection) {
-            ForEach(Self.timeOptions, id: \.self) { minute in
-                Text(Self.timeLabel(for: minute)).tag(minute)
-            }
-        }
-        .labelsHidden()
-        .frame(width: 96)
-        .tint(InterfaceDesign.accent)
-    }
-
-    private static let timeOptions = Array(stride(from: 0, through: 23 * 60 + 30, by: 30))
-
-    private static func timeLabel(for minuteOfDay: Int) -> String {
-        String(format: "%02d:%02d", minuteOfDay / 60, minuteOfDay % 60)
-    }
-}
-
-struct ThresholdSettingsRow: View {
-    let title: String
-    @Binding var value: Double
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .font(.callout.weight(.medium))
-
-                Spacer(minLength: 16)
-
-                Text("\(Int(value))%")
-                    .font(.callout.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-
-            HStack(spacing: 12) {
-                Slider(value: $value, in: 5...80, step: 5)
-                    .tint(InterfaceDesign.accent)
-                ProgressView(value: value, total: 100)
-                    .tint(InterfaceDesign.accent)
-                    .frame(width: 82)
-            }
-        }
-        .settingsRow()
-    }
-}
-
 private extension View {
     func settingsRow(verticalPadding: CGFloat = 12) -> some View {
         self
@@ -587,18 +300,6 @@ private extension View {
                     .fill(InterfaceDesign.separator)
                     .frame(height: 1)
                     .padding(.leading, 14)
-            }
-    }
-}
-
-private struct SettingsActionButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(.primary)
-            .background(InterfaceDesign.basePanel.opacity(configuration.isPressed ? 0.90 : 0.60), in: RoundedRectangle(cornerRadius: InterfaceDesign.controlRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: InterfaceDesign.controlRadius, style: .continuous)
-                    .strokeBorder(InterfaceDesign.border, lineWidth: 1)
             }
     }
 }

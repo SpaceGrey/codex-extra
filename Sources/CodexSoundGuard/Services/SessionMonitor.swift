@@ -13,8 +13,6 @@ final class SessionMonitor: ObservableObject {
     @Published private(set) var lastEventStatus = "尚未识别到 Codex 事件"
     @Published private(set) var recognizedEventCount = 0
     @Published private(set) var latestUsage: TokenUsageSnapshot?
-    @Published private(set) var usageTrend: [UsageTrendPoint] = []
-    @Published private(set) var sessionUsageRankings: [SessionUsageSummary] = []
 
     private let soundPlayer = SoundPlayer()
     private let logger = Logger(subsystem: "com.whitewood.codex-monitor", category: "monitor")
@@ -28,14 +26,11 @@ final class SessionMonitor: ObservableObject {
     private var approvalRequestKeys: Set<String> = []
     private var approvalRequestKeyOrder: [String] = []
     private var currentTurnIDByPath: [String: String] = [:]
-    private var latestUserMessageByPath: [String: String] = [:]
     private var cachedDiscoveredFiles: [SessionFileCandidate] = []
     private var lastFullDiscoveryAt: Date?
     private var cachedRecentFiles: [SessionFileCandidate] = []
     private var lastRecentDiscoveryAt: Date?
     private var lastDiscoveryRootPath: String?
-    private var usageSamples: [CodexSoundGuardCore.UsageSample] = []
-    private var sessionUsageByPath: [String: SessionUsageSummary] = [:]
     private var primed = false
     private let startedAt = Date()
     private let activeScanInterval: TimeInterval = 1.5
@@ -47,10 +42,6 @@ final class SessionMonitor: ObservableObject {
     private let maxDiscoveredFiles = 240
     private let bootstrapLookback: TimeInterval = 24 * 60 * 60
     private let bootstrapByteLimit: UInt64 = 1_048_576
-    private let trendLookback: TimeInterval = 24 * 60 * 60
-    private let trendHourCount = 24
-    private let maxUsageSamples = 500
-    private let maxSessionRankings = 3
     private let completionFreshnessTolerance: TimeInterval = 2
     private let maxRememberedCompletions = 500
     private let maxRememberedApprovalRequests = 500
@@ -98,12 +89,6 @@ final class SessionMonitor: ObservableObject {
                 resetsAt: now.addingTimeInterval(46 * 60 * 60)
             )
         )
-        monitor.usageTrend = Self.previewTrend()
-        monitor.sessionUsageRankings = [
-            SessionUsageSummary(path: "/Users/demo/.codex/sessions/app-redesign.jsonl", title: "重新设计 UI，现在有点花哨，不够高级", fileName: "app-redesign", totalTokens: 207_310, lastTokens: 21_360, updatedAt: now),
-            SessionUsageSummary(path: "/Users/demo/.codex/sessions/readme-polish.jsonl", title: "README 双语并调整为开源项目说明", fileName: "readme-polish", totalTokens: 128_400, lastTokens: 8_920, updatedAt: now.addingTimeInterval(-28 * 60)),
-            SessionUsageSummary(path: "/Users/demo/.codex/sessions/release-fix.jsonl", title: "修复发布资产里的 DMG 和截图问题", fileName: "release-fix", totalTokens: 76_820, lastTokens: 12_110, updatedAt: now.addingTimeInterval(-73 * 60))
-        ]
         return monitor
     }
 
@@ -162,7 +147,6 @@ final class SessionMonitor: ObservableObject {
             offsets.removeValue(forKey: path)
             partialLines.removeValue(forKey: path)
             currentTurnIDByPath.removeValue(forKey: path)
-            latestUserMessageByPath.removeValue(forKey: path)
             removeTrackedTurnKeys(forPath: path)
             removeTrackedApprovalRequests(forPath: path)
         }
@@ -376,13 +360,12 @@ final class SessionMonitor: ObservableObject {
                 lastStatus = "批准提醒已静音 \(Self.timeFormatter.string(from: Date()))"
             } else if soundResult == .skippedBySoundDisabled {
                 lastStatus = "批准提示音关闭 \(Self.timeFormatter.string(from: Date()))"
-            } else if soundResult == .suppressedByQuietHours {
-                lastStatus = "安静时段内已静音 \(Self.timeFormatter.string(from: Date()))"
             } else {
                 lastStatus = "等待批准 \(Self.timeFormatter.string(from: Date()))"
             }
-        case .userMessage(let message):
-            latestUserMessageByPath[path] = message
+        case .userMessage(_):
+            break
+
         case .assistantMessage(let message):
             let key = eventTurnKey(path: path, event: event)
             var turn = turns[key] ?? TurnAccumulator()
@@ -403,7 +386,6 @@ final class SessionMonitor: ObservableObject {
             turns[key] = turn
         case .tokenCount(let usage):
             latestUsage = usage
-            recordUsage(usage, timestamp: event.timestamp ?? Date(), path: path, title: latestUserMessageByPath[path])
         case .taskComplete:
             let key = eventTurnKey(path: path, event: event)
             guard let turn = turns[key] else {
@@ -440,8 +422,6 @@ final class SessionMonitor: ObservableObject {
                 lastStatus = "提醒已静音 \(Self.timeFormatter.string(from: Date()))"
             } else if soundResult == .skippedBySoundDisabled {
                 lastStatus = "提示音关闭 \(Self.timeFormatter.string(from: Date()))"
-            } else if soundResult == .suppressedByQuietHours {
-                lastStatus = "安静时段内已静音 \(Self.timeFormatter.string(from: Date()))"
             } else {
                 lastStatus = "\(classification.outcome.title) \(Self.timeFormatter.string(from: Date()))"
             }
@@ -456,15 +436,6 @@ final class SessionMonitor: ObservableObject {
         let volume = defaults.double(forKey: AppDefaults.Key.volume)
         guard force || defaults.bool(forKey: AppDefaults.Key.monitoringEnabled) else {
             return .skippedByAlertsDisabled
-        }
-
-        let quietHours = QuietHoursPolicy(
-            enabled: defaults.bool(forKey: AppDefaults.Key.quietHoursEnabled),
-            startMinute: defaults.integer(forKey: AppDefaults.Key.quietHoursStartMinute),
-            endMinute: defaults.integer(forKey: AppDefaults.Key.quietHoursEndMinute)
-        )
-        guard force || !quietHours.isActive(at: Date()) else {
-            return .suppressedByQuietHours
         }
 
         switch outcome {
@@ -490,15 +461,6 @@ final class SessionMonitor: ObservableObject {
         let volume = defaults.double(forKey: AppDefaults.Key.volume)
         guard force || defaults.bool(forKey: AppDefaults.Key.monitoringEnabled) else {
             return .skippedByAlertsDisabled
-        }
-
-        let quietHours = QuietHoursPolicy(
-            enabled: defaults.bool(forKey: AppDefaults.Key.quietHoursEnabled),
-            startMinute: defaults.integer(forKey: AppDefaults.Key.quietHoursStartMinute),
-            endMinute: defaults.integer(forKey: AppDefaults.Key.quietHoursEndMinute)
-        )
-        guard force || !quietHours.isActive(at: Date()) else {
-            return .suppressedByQuietHours
         }
 
         guard force || defaults.bool(forKey: AppDefaults.Key.approvalSoundEnabled) else {
@@ -563,18 +525,8 @@ final class SessionMonitor: ObservableObject {
             currentTurnIDByPath.removeValue(forKey: path)
         }
 
-        if let latestUserMessage = snapshot.latestUserMessage {
-            latestUserMessageByPath[path] = latestUserMessage
-        }
-
         if let latestUsage = snapshot.latestUsage {
             self.latestUsage = latestUsage
-            let latestTimestamp = snapshot.usageEvents.last?.timestamp ?? Date()
-            updateSessionUsage(latestUsage, timestamp: latestTimestamp, path: path, title: snapshot.latestUserMessage)
-        }
-
-        for usageEvent in snapshot.usageEvents {
-            recordUsage(usageEvent.usage, timestamp: usageEvent.timestamp, path: path, title: snapshot.latestUserMessage)
         }
 
         if !snapshot.turnsByID.isEmpty {
@@ -592,55 +544,12 @@ final class SessionMonitor: ObservableObject {
         approvalRequestKeys.removeAll()
         approvalRequestKeyOrder.removeAll()
         currentTurnIDByPath.removeAll()
-        latestUserMessageByPath.removeAll()
         cachedDiscoveredFiles.removeAll()
         lastFullDiscoveryAt = nil
         cachedRecentFiles.removeAll()
         lastRecentDiscoveryAt = nil
         lastDiscoveryRootPath = nil
-        usageSamples.removeAll()
-        usageTrend.removeAll()
-        sessionUsageByPath.removeAll()
-        sessionUsageRankings.removeAll()
         primed = false
-    }
-
-    private func recordUsage(_ usage: TokenUsageSnapshot, timestamp: Date, path: String, title: String? = nil) {
-        usageSamples.append(CodexSoundGuardCore.UsageSample(timestamp: timestamp, path: path, tokens: max(0, usage.last.totalTokens)))
-        if usageSamples.count > maxUsageSamples {
-            usageSamples.removeFirst(usageSamples.count - maxUsageSamples)
-        }
-
-        let cutoff = Date().addingTimeInterval(-trendLookback)
-        usageSamples.removeAll { $0.timestamp < cutoff }
-        usageTrend = UsageAnalytics.buildTrend(from: usageSamples, now: Date(), hourCount: trendHourCount)
-        updateSessionUsage(usage, timestamp: timestamp, path: path, title: title)
-    }
-
-    private func updateSessionUsage(_ usage: TokenUsageSnapshot, timestamp: Date, path: String, title: String? = nil) {
-        let existing = sessionUsageByPath[path]
-        sessionUsageByPath[path] = UsageAnalytics.makeSessionSummary(
-            usage: usage,
-            timestamp: timestamp,
-            path: path,
-            title: title,
-            existingTitle: existing?.title
-        )
-
-        sessionUsageRankings = UsageAnalytics.rankedSessions(Array(sessionUsageByPath.values), limit: maxSessionRankings)
-    }
-
-    private static func previewTrend() -> [UsageTrendPoint] {
-        let calendar = Calendar.current
-        let now = Date()
-        let currentHour = calendar.dateInterval(of: .hour, for: now)?.start ?? now
-        let values = [1_800, 0, 2_400, 0, 3_100, 0, 6_200, 8_400, 12_900, 0, 4_700, 0, 0, 9_800, 23_600, 0, 7_400, 16_200, 0, 5_900, 0, 10_200, 0, 21_360]
-        return values.enumerated().compactMap { index, value in
-            guard let start = calendar.date(byAdding: .hour, value: index - (values.count - 1), to: currentHour) else {
-                return nil
-            }
-            return UsageTrendPoint(hourStart: start, tokens: value)
-        }
     }
 
     private func eventTurnKey(path: String, event: SessionEvent) -> String {
@@ -788,7 +697,6 @@ private enum SoundPlaybackResult {
     case played
     case skippedByAlertsDisabled
     case skippedBySoundDisabled
-    case suppressedByQuietHours
 }
 
 private extension SessionEventKind {

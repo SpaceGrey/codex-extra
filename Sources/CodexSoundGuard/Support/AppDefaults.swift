@@ -7,7 +7,6 @@ enum AppDefaults {
         static let completionSoundEnabled = "completionSoundEnabled"
         static let failureSoundEnabled = "failureSoundEnabled"
         static let approvalSoundEnabled = "approvalSoundEnabled"
-        static let commandFailureHeuristicEnabled = "commandFailureHeuristicEnabled"
         static let failureDetectionMode = "failureDetectionMode"
         static let completionSoundPath = "completionSoundPath"
         static let failureSoundPath = "failureSoundPath"
@@ -15,15 +14,6 @@ enum AppDefaults {
         static let sessionsRootPath = "sessionsRootPath"
         static let volume = "volume"
         static let menuBarDisplayMode = "menuBarDisplayMode"
-        static let limitWarningsEnabled = "limitWarningsEnabled"
-        static let primaryLimitWarningThreshold = "primaryLimitWarningThreshold"
-        static let secondaryLimitWarningThreshold = "secondaryLimitWarningThreshold"
-        static let quietHoursEnabled = "quietHoursEnabled"
-        static let quietHoursStartMinute = "quietHoursStartMinute"
-        static let quietHoursEndMinute = "quietHoursEndMinute"
-        static let automaticUpdateChecksEnabled = "automaticUpdateChecksEnabled"
-        static let lastUpdateCheckAt = "lastUpdateCheckAt"
-        static let ignoredUpdateVersion = "ignoredUpdateVersion"
     }
 
     static var sessionsRootPath: String {
@@ -59,23 +49,13 @@ enum AppDefaults {
             Key.completionSoundEnabled: true,
             Key.failureSoundEnabled: true,
             Key.approvalSoundEnabled: true,
-            Key.commandFailureHeuristicEnabled: false,
             Key.failureDetectionMode: TurnFailureDetectionMode.strict.rawValue,
             Key.completionSoundPath: defaultCompletionSoundPath,
             Key.failureSoundPath: defaultFailureSoundPath,
             Key.approvalSoundPath: defaultApprovalSoundPath,
             Key.sessionsRootPath: sessionsRootPath,
             Key.volume: 0.8,
-            Key.menuBarDisplayMode: MenuBarDisplayMode.graphic.rawValue,
-            Key.limitWarningsEnabled: true,
-            Key.primaryLimitWarningThreshold: 20.0,
-            Key.secondaryLimitWarningThreshold: 20.0,
-            Key.quietHoursEnabled: false,
-            Key.quietHoursStartMinute: 22 * 60,
-            Key.quietHoursEndMinute: 8 * 60,
-            Key.automaticUpdateChecksEnabled: false,
-            Key.lastUpdateCheckAt: 0.0,
-            Key.ignoredUpdateVersion: ""
+            Key.menuBarDisplayMode: MenuBarDisplayMode.graphic.rawValue
         ])
     }
 }

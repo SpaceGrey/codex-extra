@@ -7,20 +7,19 @@ final class PreferencesWindowController: NSObject, NSWindowDelegate {
 
     private var window: NSWindow?
 
-    func show(monitor: SessionMonitor, updateChecker: UpdateChecker) {
-        let window = window ?? makeWindow(monitor: monitor, updateChecker: updateChecker)
+    func show(monitor: SessionMonitor) {
+        let window = window ?? makeWindow(monitor: monitor)
         self.window = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    private func makeWindow(monitor: SessionMonitor, updateChecker: UpdateChecker) -> NSWindow {
+    private func makeWindow(monitor: SessionMonitor) -> NSWindow {
         let hostingView = NSHostingView(
             rootView: PreferencesView()
                 .environmentObject(monitor)
-                .environmentObject(updateChecker)
         )
-        let size = NSSize(width: 780, height: 700)
+        let size = NSSize(width: 700, height: 560)
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.titled, .closable, .miniaturizable],
