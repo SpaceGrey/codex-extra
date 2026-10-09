@@ -150,7 +150,8 @@ public enum SessionLogParser {
             modelContextWindow: intValue(info["model_context_window"]),
             primaryRateLimit: parseRateLimit(rateLimits?["primary"] as? [String: Any]),
             secondaryRateLimit: parseRateLimit(rateLimits?["secondary"] as? [String: Any]),
-            credits: parseCredits(creditsValue)
+            credits: parseCredits(creditsValue),
+            rateLimitID: stringValue(rateLimits?["limit_id"])
         )
     }
 

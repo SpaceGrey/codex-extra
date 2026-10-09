@@ -4,6 +4,7 @@ public struct SessionReplaySnapshot: Equatable {
     public let currentTurnID: String?
     public let turnsByID: [String: TurnAccumulator]
     public let latestUsage: TokenUsageSnapshot?
+    public let latestUsageTimestamp: Date?
     public let usageEvents: [TokenUsageEvent]
     public let latestUserMessage: String?
 
@@ -11,12 +12,14 @@ public struct SessionReplaySnapshot: Equatable {
         currentTurnID: String?,
         turnsByID: [String: TurnAccumulator],
         latestUsage: TokenUsageSnapshot? = nil,
+        latestUsageTimestamp: Date? = nil,
         usageEvents: [TokenUsageEvent] = [],
         latestUserMessage: String? = nil
     ) {
         self.currentTurnID = currentTurnID
         self.turnsByID = turnsByID
         self.latestUsage = latestUsage
+        self.latestUsageTimestamp = latestUsageTimestamp
         self.usageEvents = usageEvents
         self.latestUserMessage = latestUserMessage
     }
@@ -27,6 +30,7 @@ public enum SessionReplay {
         var currentTurnID: String?
         var turnsByID: [String: TurnAccumulator] = [:]
         var latestUsage: TokenUsageSnapshot?
+        var latestUsageTimestamp: Date?
         var usageEvents: [TokenUsageEvent] = []
         var latestUserMessage: String?
         var implicitTurnCounter = 0
@@ -74,7 +78,14 @@ public enum SessionReplay {
                     currentTurnID = nil
                 }
             case .tokenCount(let usage):
-                latestUsage = usage
+                let selected = UsageSnapshotSelector.adopt(
+                    current: latestUsage,
+                    currentAt: latestUsageTimestamp,
+                    incoming: usage,
+                    incomingAt: event.timestamp
+                )
+                latestUsage = selected.usage
+                latestUsageTimestamp = selected.at
                 usageEvents.append(TokenUsageEvent(timestamp: event.timestamp ?? Date(), usage: usage))
             case .approvalRequested:
                 break
@@ -87,6 +98,7 @@ public enum SessionReplay {
             currentTurnID: currentTurnID,
             turnsByID: turnsByID,
             latestUsage: latestUsage,
+            latestUsageTimestamp: latestUsageTimestamp,
             usageEvents: usageEvents,
             latestUserMessage: latestUserMessage
         )

@@ -83,6 +83,20 @@ final class SessionLogParserTests: XCTestCase {
         XCTAssertEqual(usage.primaryRateLimit?.usedPercent, 37.5)
         XCTAssertEqual(usage.secondaryRateLimit?.windowMinutes, 10080)
         XCTAssertEqual(usage.credits?.balance, "0")
+        XCTAssertNil(usage.rateLimitID)
+    }
+
+    func testParsesPremiumTokenCountWithEmptyRateLimitWindows() {
+        let line = #"{"timestamp":"2026-10-09T12:21:50.268Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0,"total_tokens":110},"last_token_usage":{"input_tokens":100,"cached_input_tokens":0,"output_tokens":10,"reasoning_output_tokens":0,"total_tokens":110},"model_context_window":258400},"rate_limits":{"limit_id":"premium","primary":null,"secondary":null,"credits":{"has_credits":false,"unlimited":false,"balance":"0"}}}}"#
+
+        guard case .tokenCount(let usage) = SessionLogParser.parseLine(line)?.kind else {
+            return XCTFail("Expected token count event")
+        }
+
+        XCTAssertEqual(usage.rateLimitID, "premium")
+        XCTAssertNil(usage.primaryRateLimit)
+        XCTAssertNil(usage.secondaryRateLimit)
+        XCTAssertEqual(usage.last.totalTokens, 110)
     }
 
     func testClassifiesMessageFailure() {

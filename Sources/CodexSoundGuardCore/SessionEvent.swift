@@ -53,6 +53,7 @@ public struct TokenUsageSnapshot: Equatable {
     public let primaryRateLimit: UsageRateLimit?
     public let secondaryRateLimit: UsageRateLimit?
     public let credits: UsageCredits?
+    public let rateLimitID: String?
 
     public init(
         total: TokenUsage,
@@ -60,7 +61,8 @@ public struct TokenUsageSnapshot: Equatable {
         modelContextWindow: Int? = nil,
         primaryRateLimit: UsageRateLimit? = nil,
         secondaryRateLimit: UsageRateLimit? = nil,
-        credits: UsageCredits? = nil
+        credits: UsageCredits? = nil,
+        rateLimitID: String? = nil
     ) {
         self.total = total
         self.last = last
@@ -68,6 +70,64 @@ public struct TokenUsageSnapshot: Equatable {
         self.primaryRateLimit = primaryRateLimit
         self.secondaryRateLimit = secondaryRateLimit
         self.credits = credits
+        self.rateLimitID = rateLimitID
+    }
+
+    /// Keep the Codex 5-hour and 7-day windows when a later snapshot does not carry them.
+    /// Codex appends a `premium` token count with both windows set to null once the 5-hour limit is reached.
+    public func keepingCodexRateLimits(from previous: TokenUsageSnapshot?) -> TokenUsageSnapshot {
+        guard let previous else {
+            return self
+        }
+
+        guard adoptsCodexRateLimits else {
+            return TokenUsageSnapshot(
+                total: total,
+                last: last,
+                modelContextWindow: modelContextWindow ?? previous.modelContextWindow,
+                primaryRateLimit: previous.primaryRateLimit,
+                secondaryRateLimit: previous.secondaryRateLimit,
+                credits: credits ?? previous.credits,
+                rateLimitID: previous.rateLimitID
+            )
+        }
+
+        return TokenUsageSnapshot(
+            total: total,
+            last: last,
+            modelContextWindow: modelContextWindow ?? previous.modelContextWindow,
+            primaryRateLimit: primaryRateLimit ?? previous.primaryRateLimit,
+            secondaryRateLimit: secondaryRateLimit ?? previous.secondaryRateLimit,
+            credits: credits ?? previous.credits,
+            rateLimitID: rateLimitID ?? previous.rateLimitID
+        )
+    }
+
+    private var adoptsCodexRateLimits: Bool {
+        if let rateLimitID {
+            return rateLimitID == Self.codexLimitID
+        }
+        return primaryRateLimit != nil || secondaryRateLimit != nil
+    }
+
+    private static let codexLimitID = "codex"
+}
+
+public enum UsageSnapshotSelector {
+    public static func adopt(
+        current: TokenUsageSnapshot?,
+        currentAt: Date?,
+        incoming: TokenUsageSnapshot,
+        incomingAt: Date?
+    ) -> (usage: TokenUsageSnapshot, at: Date?) {
+        if let current, let currentAt, let incomingAt, incomingAt < currentAt {
+            return (current, currentAt)
+        }
+
+        return (
+            incoming.keepingCodexRateLimits(from: current),
+            incomingAt ?? currentAt
+        )
     }
 }
 

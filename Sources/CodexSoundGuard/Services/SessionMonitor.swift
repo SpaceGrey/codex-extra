@@ -32,13 +32,18 @@ final class SessionMonitor: ObservableObject {
     private var lastRecentDiscoveryAt: Date?
     private var lastDiscoveryRootPath: String?
     private var primed = false
+    private var latestUsageAt: Date?
+    private var lastBroadScanAt: Date?
+    private var hotUntil: [String: Date] = [:]
     private let startedAt = Date()
-    private let activeScanInterval: TimeInterval = 1.5
-    private let idleScanInterval: TimeInterval = 6
+    private let hotScanInterval: TimeInterval = 0.4
+    private let broadScanInterval: TimeInterval = 1.5
+    private let hotRetention: TimeInterval = 180
+    private let hotFileLimit = 8
     private let recentDayLookback = 7
     private let maxRecentFiles = 120
-    private let recentDiscoveryInterval: TimeInterval = 12
-    private let fullDiscoveryInterval: TimeInterval = 60
+    private let recentDiscoveryInterval: TimeInterval = 3
+    private let fullDiscoveryInterval: TimeInterval = 30
     private let maxDiscoveredFiles = 240
     private let bootstrapLookback: TimeInterval = 24 * 60 * 60
     private let bootstrapByteLimit: UInt64 = 1_048_576
@@ -105,11 +110,14 @@ final class SessionMonitor: ObservableObject {
 
     private func scheduleNextScan() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: nextScanInterval, repeats: false) { [weak self] _ in
+        let timer = Timer(timeInterval: nextScanInterval, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.handleScanTimer()
             }
         }
+        timer.tolerance = 0.05
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     private func handleScanTimer() {
@@ -123,7 +131,7 @@ final class SessionMonitor: ObservableObject {
     }
 
     private var nextScanInterval: TimeInterval {
-        hasActiveTurns ? activeScanInterval : idleScanInterval
+        hotScanInterval
     }
 
     func testCompletionSound() {
@@ -139,6 +147,20 @@ final class SessionMonitor: ObservableObject {
     }
 
     private func scan() {
+        let now = Date()
+        if let lastBroadScanAt, now.timeIntervalSince(lastBroadScanAt) < broadScanInterval {
+            for url in hotFileURLs() {
+                scanFile(url)
+            }
+        } else {
+            self.lastBroadScanAt = now
+            scanDiscoveredFiles()
+        }
+
+        primed = true
+    }
+
+    private func scanDiscoveredFiles() {
         let urls = sessionFiles()
         filesWatched = urls.count
 
@@ -147,6 +169,7 @@ final class SessionMonitor: ObservableObject {
             offsets.removeValue(forKey: path)
             partialLines.removeValue(forKey: path)
             currentTurnIDByPath.removeValue(forKey: path)
+            hotUntil.removeValue(forKey: path)
             removeTrackedTurnKeys(forPath: path)
             removeTrackedApprovalRequests(forPath: path)
         }
@@ -154,8 +177,31 @@ final class SessionMonitor: ObservableObject {
         for url in urls {
             scanFile(url)
         }
+    }
 
-        primed = true
+    private func hotFileURLs() -> [URL] {
+        let now = Date()
+        hotUntil = hotUntil.filter { $0.value > now }
+
+        var seen = Set<String>()
+        var urls: [URL] = []
+        func append(_ path: String) {
+            guard seen.insert(path).inserted, FileManager.default.fileExists(atPath: path) else {
+                return
+            }
+            urls.append(URL(fileURLWithPath: path))
+        }
+
+        for path in hotUntil.keys {
+            append(path)
+        }
+        for path in currentTurnIDByPath.keys {
+            append(path)
+        }
+        for candidate in cachedRecentFiles.sorted(by: { $0.modifiedAt > $1.modifiedAt }).prefix(hotFileLimit) {
+            append(candidate.url.path)
+        }
+        return urls
     }
 
     private func sessionFiles() -> [URL] {
@@ -297,6 +343,8 @@ final class SessionMonitor: ObservableObject {
             return
         }
 
+        hotUntil[path] = Date().addingTimeInterval(hotRetention)
+
         guard let handle = try? FileHandle(forReadingFrom: url) else {
             return
         }
@@ -385,7 +433,7 @@ final class SessionMonitor: ObservableObject {
             turn.hasCommandFailure = true
             turns[key] = turn
         case .tokenCount(let usage):
-            latestUsage = usage
+            adoptUsage(usage, at: event.timestamp)
         case .taskComplete:
             let key = eventTurnKey(path: path, event: event)
             guard let turn = turns[key] else {
@@ -526,7 +574,7 @@ final class SessionMonitor: ObservableObject {
         }
 
         if let latestUsage = snapshot.latestUsage {
-            self.latestUsage = latestUsage
+            adoptUsage(latestUsage, at: snapshot.latestUsageTimestamp)
         }
 
         if !snapshot.turnsByID.isEmpty {
@@ -549,7 +597,21 @@ final class SessionMonitor: ObservableObject {
         cachedRecentFiles.removeAll()
         lastRecentDiscoveryAt = nil
         lastDiscoveryRootPath = nil
+        latestUsageAt = nil
+        lastBroadScanAt = nil
+        hotUntil.removeAll()
         primed = false
+    }
+
+    private func adoptUsage(_ usage: TokenUsageSnapshot, at timestamp: Date?) {
+        let selected = UsageSnapshotSelector.adopt(
+            current: latestUsage,
+            currentAt: latestUsageAt,
+            incoming: usage,
+            incomingAt: timestamp
+        )
+        latestUsage = selected.usage
+        latestUsageAt = selected.at
     }
 
     private func eventTurnKey(path: String, event: SessionEvent) -> String {
@@ -644,10 +706,6 @@ final class SessionMonitor: ObservableObject {
 
     private func hasActiveTurn(forPath path: String) -> Bool {
         turns.keys.contains { $0.hasPrefix("\(path)\u{1F}") }
-    }
-
-    private var hasActiveTurns: Bool {
-        !turns.isEmpty
     }
 
     private func markRecognized(_ event: SessionEvent) {
